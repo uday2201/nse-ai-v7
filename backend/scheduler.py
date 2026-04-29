@@ -177,6 +177,50 @@ def get_scheduler_status() -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════
+# DECORATOR — must appear before job defs (decorators run at import)
+# ═══════════════════════════════════════════════════════════════
+
+def _job_wrapper(job_id: str):
+    """Decorator: adds timing, logging, error handling to every job."""
+
+    def decorator(fn):
+        def wrapper(*args, **kwargs):
+            if not _is_job_enabled(job_id):
+                print(f"[Scheduler] {job_id} is paused — skipping")
+                return
+
+            t0 = datetime.now(IST)
+            print(f"[Scheduler] ▶ {job_id} started at {t0.strftime('%H:%M:%S IST')}")
+            result = error = None
+            status = "SUCCESS"
+
+            try:
+                result = fn(*args, **kwargs)
+            except Exception as e:
+                error = traceback.format_exc()
+                status = "FAILED"
+                print(f"[Scheduler] ✗ {job_id} failed: {e}")
+                try:
+                    from alerts import send_alert
+
+                    send_alert(f"⚠️ Scheduler job FAILED: {job_id}\n{str(e)[:200]}", "INFO")
+                except Exception:
+                    pass
+
+            duration = (datetime.now(IST) - t0).total_seconds()
+            _log_job(job_id, t0, duration, status, result, error)
+
+            if status == "SUCCESS":
+                print(f"[Scheduler] ✓ {job_id} done in {duration:.1f}s")
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+# ═══════════════════════════════════════════════════════════════
 # INDIVIDUAL JOBS
 # ═══════════════════════════════════════════════════════════════
 
@@ -468,47 +512,6 @@ def get_scheduler_log(job_id: str | None = None, limit: int = 50) -> list[dict]:
     conn.close()
     cols = ["id","job_id","started_at","finished_at","duration","status","result","error"]
     return [dict(zip(cols, r)) for r in rows]
-
-
-# ═══════════════════════════════════════════════════════════════
-# DECORATOR
-# ═══════════════════════════════════════════════════════════════
-
-def _job_wrapper(job_id: str):
-    """Decorator: adds timing, logging, error handling to every job."""
-    def decorator(fn):
-        def wrapper(*args, **kwargs):
-            if not _is_job_enabled(job_id):
-                print(f"[Scheduler] {job_id} is paused — skipping")
-                return
-
-            t0 = datetime.now(IST)
-            print(f"[Scheduler] ▶ {job_id} started at {t0.strftime('%H:%M:%S IST')}")
-            result = error = None
-            status = "SUCCESS"
-
-            try:
-                result = fn(*args, **kwargs)
-            except Exception as e:
-                error  = traceback.format_exc()
-                status = "FAILED"
-                print(f"[Scheduler] ✗ {job_id} failed: {e}")
-                # Alert on failure
-                try:
-                    from alerts import send_alert
-                    send_alert(f"⚠️ Scheduler job FAILED: {job_id}\n{str(e)[:200]}", "INFO")
-                except Exception:
-                    pass
-
-            duration = (datetime.now(IST) - t0).total_seconds()
-            _log_job(job_id, t0, duration, status, result, error)
-
-            if status == "SUCCESS":
-                print(f"[Scheduler] ✓ {job_id} done in {duration:.1f}s")
-
-            return result
-        return wrapper
-    return decorator
 
 
 # ═══════════════════════════════════════════════════════════════
