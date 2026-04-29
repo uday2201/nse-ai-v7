@@ -1,0 +1,9 @@
+# Render Blueprint — deploy the FastAPI backend from this repo root.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: nse-ai-v7-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /

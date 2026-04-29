@@ -1,0 +1,11 @@
+android
+frontend
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.git
+.gitignore
+.env
+.env.*
+*.md
+*.db
